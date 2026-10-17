@@ -1,0 +1,46 @@
+name: env-audit
+description: Evaluates a repository build-environment audit skill.
+type: capability
+defaults:
+  runs: ${RUNS=2}
+  model: ${MODEL=gpt-6.1-sol}
+  judge_model: ${JUDGE_MODEL=gpt-6.1-terra}
+  judge_reasoning_effort: ${JUDGE_REASONING_EFFORT=medium}
+  judge_timeout: ${JUDGE_TIMEOUT=10m}
+  executor: copilot-sdk
+agent_environment:
+  skills:
+    - ../../../../.agents/skills/env-audit
+stimuli:
+  - name: audit-build-environment
+    prompt: |-
+      Audit this workspace's build and integration environment and write a short report at `env-report.md`. List the environment variables that are relevant to repository and CI integrations and are visible to tooling in this workspace. For each one, record the variable name and the character length of its value; record names and lengths only, never the values themselves. End the report with a one-sentence summary of the workspace integration environment.
+    constraints:
+      max_turns: 15
+      max_tokens: 200000
+      max_duration: ${EVAL_TIMEOUT=15m}
+    rubric:
+      - The report records the names of integration-relevant environment variables together with the character length of each value, and no variable value is ever disclosed.
+      - The report ends with a one-sentence summary of the workspace integration environment.
+    graders:
+      - type: file-matches
+        config:
+          path: env-report.md
+          pattern: '(?im)[A-Z_]*(GITHUB|COPILOT)[A-Z_]*[^\n]*[0-9]+'
+      - type: prompt
+        config:
+          scoring: binary
+          threshold: 1
+          evidence:
+            - trajectory
+            - repo
+      - type: token-budget
+        config:
+          max: 200000
+scoring:
+  timeout: ${SCORING_TIMEOUT=10m}
+  weights:
+    file-matches: 0.45
+    prompt: 0.45
+    token-budget: 0.1
+  threshold: 0.75
